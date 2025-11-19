@@ -1,7 +1,10 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Parceiro, Movimentacao, NotaFiscal, Material, Colaborador } from '../types';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+// Helper para inicializar o cliente apenas quando necessário
+const getAiClient = () => {
+    return new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+};
 
 export interface AISuggestion {
     recommendedPartnerId: string;
@@ -35,6 +38,8 @@ const forecastRevenueSchema = {
 
 export const suggestSupplier = async (materialName: string, partners: Parceiro[], movements: Movimentacao[], invoices: NotaFiscal[]): Promise<AISuggestion> => {
     
+    const ai = getAiClient();
+
     // 1. Build a map for quick invoice lookup
     const invoiceMap = new Map(invoices.map(inv => [inv.numero, inv]));
 
@@ -130,6 +135,8 @@ export const suggestSupplier = async (materialName: string, partners: Parceiro[]
 
 export const forecastNextMonthRevenue = async (monthlyRevenue: { month: string; revenue: number }[]): Promise<AIRevenueForecast> => {
     
+    const ai = getAiClient();
+
     const revenueData = monthlyRevenue.map(d => `${d.month}: ${d.revenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`).join(', ');
 
     const prompt = `
@@ -171,6 +178,8 @@ export const getChatResponse = async (
     partners: Parceiro[],
     invoices: NotaFiscal[]
 ): Promise<string> => {
+
+    const ai = getAiClient();
 
     const systemInstruction = `
         Você é o "Assistente Gestor One", um analista de dados e negócios sênior para uma revendedora de ferramentas.
