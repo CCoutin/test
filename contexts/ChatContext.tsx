@@ -17,6 +17,7 @@ interface ChatContextType {
   confirmAction: () => Promise<void>;
   cancelAction: () => void;
   resetChat: () => void;
+  chatError: string | null;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -32,23 +33,36 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoading, setIsLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState<AIActionConfirmation | null>(null);
   const [chatSession, setChatSession] = useState<Chat | null>(null);
+  const [chatError, setChatError] = useState<string | null>(null);
 
   const initializeChat = useCallback(() => {
     if (materials.length > 0 && collaborators.length > 0) {
-        const session = startChat(materials, movements, collaborators, partners, invoices);
-        setChatSession(session);
+        try {
+            const session = startChat(materials, movements, collaborators, partners, invoices);
+            setChatSession(session);
+            setChatError(null);
+        } catch (error) {
+            console.error("Falha ao inicializar o chat da IA:", error);
+            const errorMessage = error instanceof Error ? error.message : "Erro desconhecido.";
+            setMessages([{ sender: 'ai', text: `Não foi possível iniciar o assistente de IA. Verifique se a chave de API está configurada corretamente no ambiente.`}]);
+            setChatError(errorMessage);
+            setChatSession(null);
+        }
     }
   }, [materials, movements, collaborators, partners, invoices]);
   
-  // Initialize chat session only once when data is ready
   useEffect(() => {
-    if (!chatSession) {
+    if (!chatSession && !chatError) {
         initializeChat();
     }
-  }, [chatSession, initializeChat]);
+  }, [chatSession, chatError, initializeChat]);
 
 
   const sendMessage = async (input: string) => {
+    if (chatError) {
+        console.warn("Attempted to send message while chat is in error state:", chatError);
+        return;
+    }
     if (!input.trim() || isLoading || !chatSession) return;
 
     const userMessage: ChatMessage = { sender: 'user', text: input };
@@ -135,7 +149,8 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setMessages([initialMessage]);
     setPendingAction(null);
     setIsLoading(false);
-    initializeChat(); // Re-initialize to get a fresh session
+    setChatError(null);
+    initializeChat();
   };
 
 
@@ -147,6 +162,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     confirmAction,
     cancelAction,
     resetChat,
+    chatError,
   };
 
   return (

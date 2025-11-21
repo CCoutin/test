@@ -1,14 +1,16 @@
 import { GoogleGenAI, Type, FunctionDeclaration, FunctionCall, Chat, Part } from "@google/genai";
 import { Parceiro, Movimentacao, NotaFiscal, Material, Colaborador } from '../types';
 
-// Helper para inicializar o cliente apenas quando necessário
+// Helper para inicializar o cliente
 const getAiClient = () => {
-    // A chave de API deve ser obtida exclusivamente de process.env.API_KEY.
-    // A verificação anterior e o fallback para VITE_API_KEY causavam uma falha na inicialização
-    // se a variável de ambiente não estivesse configurada, impedindo a aplicação de abrir.
-    // Esta implementação assume que a chave está disponível, conforme as diretrizes.
     const apiKey = process.env.API_KEY;
-    return new GoogleGenAI({ apiKey: apiKey as string });
+    // Adiciona uma verificação explícita para a chave de API.
+    // Lançar um erro aqui permite que as funções de chamada capturem a falha
+    // e exibam uma mensagem de erro controlada, em vez de deixar a aplicação quebrar.
+    if (!apiKey) {
+        throw new Error("A chave de API do Gemini não foi configurada no ambiente.");
+    }
+    return new GoogleGenAI({ apiKey });
 };
 
 export interface AISuggestion {

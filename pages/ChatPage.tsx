@@ -12,7 +12,8 @@ const ChatPage: React.FC = () => {
         sendMessage, 
         confirmAction, 
         cancelAction, 
-        resetChat 
+        resetChat,
+        chatError
     } = useChat();
     const [input, setInput] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -41,7 +42,9 @@ const ChatPage: React.FC = () => {
                     <SparklesIcon className="w-7 h-7 text-blue-600 mr-3" />
                     <div>
                         <h1 className="text-xl font-bold text-slate-800">Chat IA - Assistente de Estoque</h1>
-                        <p className="text-sm text-slate-500">Faça perguntas ou execute ações de estoque</p>
+                        <p className="text-sm text-slate-500">
+                             {chatError ? <span className="text-red-600 font-semibold">Assistente indisponível</span> : 'Faça perguntas ou execute ações de estoque'}
+                        </p>
                     </div>
                 </div>
                 <button
@@ -95,13 +98,17 @@ const ChatPage: React.FC = () => {
                         type="text"
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
-                        placeholder={pendingAction ? "Aguardando confirmação..." : "Digite sua pergunta ou comando..."}
+                        placeholder={
+                            chatError ? "Assistente indisponível." : 
+                            pendingAction ? "Aguardando confirmação..." : 
+                            "Digite sua pergunta ou comando..."
+                        }
                         className="flex-1 block w-full rounded-lg border-2 border-transparent bg-slate-800 text-white py-2 px-3 focus:border-blue-500 focus:outline-none sm:text-sm placeholder-slate-400 disabled:bg-slate-700 disabled:cursor-not-allowed"
-                        disabled={isLoading || !!pendingAction}
+                        disabled={isLoading || !!pendingAction || !!chatError}
                     />
                     <button
                         type="submit"
-                        disabled={!input.trim() || isLoading || !!pendingAction}
+                        disabled={!input.trim() || isLoading || !!pendingAction || !!chatError}
                         className="p-2.5 bg-blue-600 text-white rounded-full shadow-md hover:bg-blue-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors"
                         aria-label="Enviar mensagem"
                     >
