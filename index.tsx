@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { AuthProvider } from './contexts/AuthContext';
 import { DatabaseProvider } from './contexts/DatabaseContext';
+import { ChatProvider } from './contexts/ChatContext';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -14,7 +15,9 @@ root.render(
   <React.StrictMode>
     <AuthProvider>
       <DatabaseProvider>
-        <App />
+        <ChatProvider>
+          <App />
+        </ChatProvider>
       </DatabaseProvider>
     </AuthProvider>
   </React.StrictMode>

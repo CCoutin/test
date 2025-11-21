@@ -1,11 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Card from '../components/ui/Card';
 import { useDatabase } from '../contexts/DatabaseContext';
 import { useAuth } from '../contexts/AuthContext';
 import { UserRole, Parceiro } from '../types';
 import PlusIcon from '../components/icons/PlusIcon';
-import { MapPinIcon, BuildingStorefrontIcon } from '../components/icons/HeroIcons';
+import { BuildingStorefrontIcon } from '../components/icons/HeroIcons';
 import PartnerDetailCard from '../components/PartnerDetailCard';
+
+// Declara a variável global L do Leaflet para o TypeScript
+declare var L: any;
+
+interface Position {
+    coords: {
+        latitude: number;
+        longitude: number;
+    }
+}
 
 const PartnersPage: React.FC = () => {
     const { user } = useAuth();
@@ -13,15 +23,123 @@ const PartnersPage: React.FC = () => {
     const [selectedPartner, setSelectedPartner] = useState<Parceiro | null>(null);
     const canEdit = user?.role === UserRole.DIRETOR;
 
-    const bounds = {
-        minLat: -21.3, maxLat: -19.5, minLon: -41.9, maxLon: -39.7,
-    };
+    const [userLocation, setUserLocation] = useState<Position | null>(null);
+    const [error, setError] = useState<string | null>(null);
+    const mapRef = useRef<any>(null);
+    const mapContainerRef = useRef<HTMLDivElement>(null);
+    const partnerMarkersRef = useRef<any[]>([]);
+    const userMarkerRef = useRef<any>(null);
 
-    const getPosition = (lat: number, lon: number) => {
-        const top = 100 - ((lat - bounds.minLat) / (bounds.maxLat - bounds.minLat)) * 100;
-        const left = ((lon - bounds.minLon) / (bounds.maxLon - bounds.minLon)) * 100;
-        return { top: `${top}%`, left: `${left}%` };
-    };
+    // Get user location
+    useEffect(() => {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => { setUserLocation(pos); setError(null); },
+                (err) => { setError(`Erro ao obter localização: ${err.message}`); }
+            );
+        } else {
+            setError('Geolocalização não é suportada por este navegador.');
+        }
+    }, []);
+
+    // Initialize map
+    useEffect(() => {
+        if (mapContainerRef.current && !mapRef.current) {
+            const map = L.map(mapContainerRef.current, {
+                center: [-20.25, -40.35], // Center of the greater Vitória area
+                zoom: 11,
+            });
+            mapRef.current = map;
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(map);
+        }
+        return () => {
+            if (mapRef.current) {
+                mapRef.current.remove();
+                mapRef.current = null;
+            }
+        };
+    }, []);
+
+    // Add partner markers
+    useEffect(() => {
+        if (!mapRef.current || mockParceiros.length === 0) return;
+
+        partnerMarkersRef.current.forEach(marker => marker.remove());
+
+        const redIcon = new L.Icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+        });
+
+        const markers = mockParceiros.map(partner => {
+            const marker = L.marker([partner.latitude, partner.longitude], { 
+                icon: redIcon,
+                partnerId: partner.id // Custom property to identify marker
+            })
+            .addTo(mapRef.current)
+            .bindPopup(`<b>${partner.nome}</b>`);
+            
+            marker.on('click', () => {
+                setSelectedPartner(partner);
+            });
+            return marker;
+        });
+        partnerMarkersRef.current = markers;
+        
+    }, [mockParceiros]);
+
+    // Add user location marker
+    useEffect(() => {
+        if (!mapRef.current || !userLocation) return;
+        
+        const blueIcon = new L.Icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+        });
+        
+        const userLatLng: [number, number] = [userLocation.coords.latitude, userLocation.coords.longitude];
+
+        if (userMarkerRef.current) {
+            userMarkerRef.current.setLatLng(userLatLng);
+        } else {
+            userMarkerRef.current = L.marker(userLatLng, { icon: blueIcon })
+                .addTo(mapRef.current)
+                .bindPopup('<b>Você</b>');
+        }
+    }, [userLocation]);
+    
+    // Highlight selected partner marker
+    useEffect(() => {
+        if (partnerMarkersRef.current.length === 0) return;
+
+        const redIcon = new L.Icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+        });
+
+        const yellowIcon = new L.Icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-yellow.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+        });
+
+        partnerMarkersRef.current.forEach(marker => {
+            const isSelected = selectedPartner && marker.options.partnerId === selectedPartner.id;
+            marker.setIcon(isSelected ? yellowIcon : redIcon);
+            if (isSelected) {
+                marker.openPopup();
+                if (mapRef.current) {
+                    mapRef.current.setView(marker.getLatLng(), 14);
+                }
+            }
+        });
+    }, [selectedPartner]);
     
     const handlePartnerSelect = (partner: Parceiro) => {
         setSelectedPartner(partner);
@@ -64,30 +182,9 @@ const PartnersPage: React.FC = () => {
         <div className="lg:col-span-2 relative">
              <Card className="h-full">
                 <h2 className="text-lg font-semibold mb-4">Localização dos Parceiros</h2>
-                <div className="relative w-full h-[32rem] bg-slate-200 rounded-lg overflow-hidden">
-                    <img src="https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/static/-40.8,-20.4,9/1000x800?access_token=pk.eyJ1IjoiZGFuaWVsc2FudG9zMTIzIiwiYSI6ImNseGo0cTNocjAyaHIya3Fvemd2MWpueGIifQ.GGFd-YV2Gv2RssKza_88dg" className="absolute w-full h-full object-cover"/>
-                    <div className="absolute inset-0">
-                        {mockParceiros.map(parceiro => {
-                            const { top, left } = getPosition(parceiro.latitude, parceiro.longitude);
-                            const isSelected = selectedPartner?.id === parceiro.id;
-                            return (
-                                <div 
-                                    key={parceiro.id} 
-                                    className="absolute transition-transform duration-300" 
-                                    style={{ top, left, transform: `translate(-50%, -50%) scale(${isSelected ? 1.2 : 1})` }}
-                                    onClick={() => handlePartnerSelect(parceiro)}
-                                >
-                                    <div className="flex flex-col items-center group cursor-pointer">
-                                        <MapPinIcon className={`w-8 h-8 drop-shadow-lg transition-colors ${isSelected ? 'text-yellow-400' : 'text-blue-600'}`} />
-                                        {isSelected && <div className="absolute w-4 h-4 bg-yellow-400 rounded-full -z-10 pin-pulse"></div>}
-                                        <span className={`hidden group-hover:block text-xs font-bold text-white px-2 py-1 rounded-md whitespace-nowrap shadow-lg mt-1 ${isSelected ? 'bg-yellow-500' : 'bg-blue-600'}`}>
-                                            {parceiro.nome}
-                                        </span>
-                                    </div>
-                                </div>
-                            )
-                        })}
-                    </div>
+                {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
+                <div ref={mapContainerRef} className="w-full h-[32rem] bg-slate-200 rounded-lg z-0">
+                    {/* O mapa será renderizado aqui pelo Leaflet */}
                 </div>
             </Card>
             {selectedPartner && (

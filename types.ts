@@ -1,4 +1,5 @@
 // types.ts
+import { FunctionCall } from '@google/genai';
 
 export enum UserRole {
   OPERADOR = 'Operador',
@@ -14,7 +15,6 @@ export interface User {
 export interface Material {
   id: string;
   nome: string;
-  foto: string;
   codigoFabricante: string;
   quantidade: number;
   armazenamento: string;
@@ -68,4 +68,21 @@ export interface NotaFiscal {
     dataEmissao: string;
     valorTotal: number;
     itens: NotaFiscalItem[];
+}
+
+// Tipos para novas funcionalidades
+
+export type NotificationType = 'low_stock' | 'zero_stock' | 'stale_stock';
+
+export interface Notification {
+  id: string;
+  type: NotificationType;
+  message: string;
+  date: string;
+  materialId: string;
+}
+
+export interface AIActionConfirmation {
+  functionCall: FunctionCall;
+  userPrompt: string;
 }

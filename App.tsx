@@ -12,10 +12,11 @@ import InvoicesPage from './pages/InvoicesPage';
 import RevenuePage from './pages/RevenuePage';
 import InventoryPage from './pages/InventoryPage';
 import AccessManagementPage from './pages/AccessManagementPage';
-import ChatPage from './pages/ChatPage'; // Importar a nova página
+import ChatPage from './pages/ChatPage';
+import ReportsPage from './pages/ReportsPage'; // Importar a nova página
 import { UserRole } from './types';
 
-export type Page = 'dashboard' | 'materiais' | 'entradas' | 'saidas' | 'consumo' | 'parceiros' | 'notas' | 'colaboradores' | 'faturamento' | 'inventario' | 'gerenciar-acessos' | 'chat-ia';
+export type Page = 'dashboard' | 'materiais' | 'entradas' | 'saidas' | 'consumo' | 'parceiros' | 'notas' | 'colaboradores' | 'faturamento' | 'inventario' | 'gerenciar-acessos' | 'chat-ia' | 'relatorios';
 
 const App: React.FC = () => {
   const { user } = useAuth();
@@ -60,7 +61,9 @@ const App: React.FC = () => {
       case 'inventario':
         return <InventoryPage />;
       case 'chat-ia':
-        return <ChatPage />; // Adicionar o case para a página de chat
+        return <ChatPage />;
+      case 'relatorios':
+        return <ReportsPage />; // Adicionar o case para a página de relatórios
       default:
         return <DashboardPage />;
     }

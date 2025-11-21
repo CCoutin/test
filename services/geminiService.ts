@@ -1,9 +1,18 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, FunctionDeclaration, FunctionCall, Chat, Part } from "@google/genai";
 import { Parceiro, Movimentacao, NotaFiscal, Material, Colaborador } from '../types';
 
 // Helper para inicializar o cliente apenas quando necessário
 const getAiClient = () => {
-    return new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+    // Em produção (Vite/Netlify), process.env pode não ter a chave.
+    // O padrão do Vite é expor variáveis prefixadas com VITE_ através de import.meta.as
+    const apiKey = process.env.API_KEY || (import.meta as any).env?.VITE_API_KEY;
+    
+    if (!apiKey) {
+        console.error("API Key não encontrada. Certifique-se de configurar a variável de ambiente 'VITE_API_KEY' no Netlify.");
+        throw new Error("Chave de API da IA não configurada.");
+    }
+
+    return new GoogleGenAI({ apiKey: apiKey as string });
 };
 
 export interface AISuggestion {
@@ -20,6 +29,12 @@ export interface ChatMessage {
     role: 'user' | 'model';
     parts: { text: string }[];
 }
+
+export interface AIChatResponse {
+    text?: string;
+    functionCall?: FunctionCall;
+}
+
 
 const forecastRevenueSchema = {
     type: Type.OBJECT,
@@ -128,7 +143,7 @@ export const suggestSupplier = async (materialName: string, partners: Parceiro[]
 
     } catch (error) {
         console.error("Erro ao chamar a API Gemini:", error);
-        throw new Error("Não foi possível obter uma sugestão da IA. Tente novamente.");
+        throw new Error("Não foi possível obter uma sugestão da IA. Verifique a chave de API.");
     }
 };
 
@@ -165,51 +180,60 @@ export const forecastNextMonthRevenue = async (monthlyRevenue: { month: string; 
 
     } catch (error) {
         console.error("Erro ao chamar a API Gemini:", error);
-        throw new Error("Não foi possível obter uma previsão da IA. Tente novamente.");
+        throw new Error("Não foi possível obter uma previsão da IA. Verifique a chave de API.");
     }
 };
 
-export const getChatResponse = async (
-    currentQuestion: string, 
-    history: ChatMessage[], 
+const registerStockMovement: FunctionDeclaration = {
+    name: 'registerStockMovement',
+    description: 'Registra uma nova movimentação de estoque: entrada, saída ou consumo de material.',
+    parameters: {
+        type: Type.OBJECT,
+        properties: {
+            materialName: {
+                type: Type.STRING,
+                description: 'O nome exato do material a ser movimentado. Deve corresponder a um item da lista de materiais.',
+            },
+            quantity: {
+                type: Type.NUMBER,
+                description: 'A quantidade de itens a ser movimentada. Deve ser um número inteiro positivo.',
+            },
+            collaboratorName: {
+                type: Type.STRING,
+                description: 'O nome exato do colaborador que está realizando a movimentação. Deve corresponder a um colaborador da lista.',
+            },
+            type: {
+                type: Type.STRING,
+                description: 'O tipo de movimentação. Deve ser "entrada", "saida" ou "consumo".',
+                enum: ['entrada', 'saida', 'consumo'],
+            },
+            invoiceNumber: {
+                type: Type.STRING,
+                description: 'O número da nota fiscal associada à entrada. Opcional e usado apenas para o tipo "entrada".',
+            }
+        },
+        required: ['materialName', 'quantity', 'collaboratorName', 'type'],
+    },
+};
+
+export const startChat = (
     materials: Material[],
     movements: Movimentacao[],
     collaborators: Colaborador[],
     partners: Parceiro[],
-    invoices: NotaFiscal[]
-): Promise<string> => {
-
+    invoices: NotaFiscal[],
+): Chat => {
     const ai = getAiClient();
 
-    const systemInstruction = `
-        Você é o "Assistente Gestor One", um analista de dados e negócios sênior para uma revendedora de ferramentas.
-        Sua principal função é analisar os dados da empresa, fornecidos em formato JSON, para responder a perguntas complexas. Você deve ser capaz de cruzar informações entre diferentes conjuntos de dados (materiais, movimentações, notas fiscais, parceiros, colaboradores).
-
-        Suas capacidades incluem:
-        1.  **Cálculos e Agregações:** Calcular totais, médias, encontrar itens mais/menos movimentados, etc.
-        2.  **Análise de Tendências:** Identificar padrões nas movimentações de estoque ao longo do tempo.
-        3.  **Cross-Referencing:** Conectar uma movimentação de entrada a uma nota fiscal e a um parceiro. Identificar qual colaborador realizou mais saídas de um determinado item.
-        4.  **Respostas Detalhadas:** Para perguntas complexas, explique seu raciocínio. Ex: "Para encontrar o fornecedor que mais vendeu 'Parafuso', eu filtrei as movimentações de entrada para 'Parafuso', identifiquei as notas fiscais associadas e somei os valores por parceiro."
-
-        Regras de Resposta:
-        - Responda de forma clara, objetiva e profissional, mas amigável.
-        - Utilize formatação Markdown (negrito para ênfase, listas para itens) para máxima legibilidade.
-        - Baseie-se *exclusivamente* nos dados JSON fornecidos. Se a informação não estiver presente, informe que não possui os dados para responder.
-        - A data de hoje é ${new Date().toLocaleDateString('pt-BR')}.
-    `;
-
-    // Serialize all data to JSON to provide full context to the AI.
     const dataContext = `
-        Abaixo estão os dados completos da empresa em formato JSON. Use-os para responder à pergunta.
-
         **Materiais em Estoque:**
-        ${JSON.stringify(materials, null, 2)}
+        ${JSON.stringify(materials.map(m => ({ id: m.id, nome: m.nome, quantidade: m.quantidade })), null, 2)}
 
-        **Movimentações de Estoque:**
-        ${JSON.stringify(movements, null, 2)}
-        
         **Colaboradores:**
-        ${JSON.stringify(collaborators, null, 2)}
+        ${JSON.stringify(collaborators.map(c => ({ id: c.id, nome: c.nome })), null, 2)}
+        
+        **Movimentações de Estoque (Histórico):**
+        ${JSON.stringify(movements, null, 2)}
 
         **Parceiros (Fornecedores):**
         ${JSON.stringify(partners, null, 2)}
@@ -217,23 +241,81 @@ export const getChatResponse = async (
         **Notas Fiscais:**
         ${JSON.stringify(invoices, null, 2)}
     `;
-    
-    try {
-        const chat = ai.chats.create({
-            model: 'gemini-2.5-flash',
-            config: {
-                systemInstruction,
-            },
-        });
-        
-        const response = await chat.sendMessage({
-            message: `Com base nos dados abaixo, responda à minha pergunta.\n\n${dataContext}\n\nPergunta: ${currentQuestion}`,
-            history: history,
-        });
 
-        return response.text;
+    const systemInstruction = `
+        Você é o "Assistente Gestor One", um analista de dados e negócios sênior para uma revendedora de ferramentas.
+        Sua principal função é analisar os dados da empresa para responder a perguntas e EXECUTAR AÇÕES.
+
+        Suas capacidades são:
+        1.  **Análise de Dados:** Responder perguntas complexas cruzando informações de materiais, movimentações, notas fiscais, parceiros e colaboradores.
+        2.  **Execução de Ações:** Você pode registrar novas movimentações de estoque (entradas, saídas e consumos) usando a ferramenta 'registerStockMovement'.
+        
+        Regras de Interação:
+        - Mantenha o contexto da conversa. Se você precisar de mais informações para completar uma ação (ex: nome do colaborador), peça ao usuário e aguarde a resposta na próxima mensagem para continuar a tarefa original.
+        - Ao receber um pedido para registrar uma movimentação (ex: "fazer entrada", "dar baixa", "registrar consumo", "anotar saída"), utilize a ferramenta 'registerStockMovement'.
+        - Para ENTRADAS, se o colaborador não for especificado, assuma que foi 'Carlos' (o estoquista). Pergunte sobre a nota fiscal se for relevante.
+        - Use OS NOMES EXATOS dos materiais e colaboradores disponíveis nos dados. Seja preciso.
+        - Se um nome for ambíguo ou não existir, peça ao usuário para esclarecer.
+        - **Nunca invente informações.** Baseie-se apenas nos dados fornecidos.
+
+        Regras de Resposta:
+        - Responda de forma clara, objetiva e profissional, mas amigável.
+        - Utilize formatação Markdown (negrito, listas) para melhor legibilidade.
+        - A data de hoje é ${new Date().toLocaleDateString('pt-BR')}.
+
+        --- DADOS DA EMPRESA (Use como contexto principal) ---
+        ${dataContext}
+        --- FIM DOS DADOS ---
+    `;
+    
+    const chat = ai.chats.create({
+        model: 'gemini-2.5-flash',
+        config: {
+            systemInstruction,
+            tools: [{ functionDeclarations: [registerStockMovement] }]
+        },
+    });
+    
+    return chat;
+};
+
+export const sendMessageToChat = async (
+    chat: Chat,
+    message: string,
+): Promise<AIChatResponse> => {
+    try {
+        const response = await chat.sendMessage({ message });
+        const functionCalls = response.functionCalls;
+        if (functionCalls && functionCalls.length > 0) {
+            return { functionCall: functionCalls[0] };
+        }
+        return { text: response.text };
     } catch (error) {
-        console.error("Erro ao chamar a API Gemini no chat:", error);
-        throw new Error("Não foi possível obter uma resposta da IA. Verifique a conexão e tente novamente.");
+        console.error("Erro ao enviar mensagem para a IA:", error);
+        throw new Error("Falha ao comunicar com o assistente.");
+    }
+};
+
+export const sendFunctionResultToChat = async (
+    chat: Chat,
+    functionCall: FunctionCall,
+    functionResponse: string
+): Promise<AIChatResponse> => {
+     try {
+        const functionResponsePart: Part = {
+            functionResponse: {
+                name: functionCall.name,
+                response: {
+                    result: functionResponse,
+                },
+            },
+        };
+
+        const response = await chat.sendMessage({ message: [functionResponsePart] });
+        
+        return { text: response.text };
+    } catch (error) {
+        console.error("Erro ao enviar resultado da função para a IA:", error);
+        throw new Error("Falha ao comunicar com o assistente após executar a ação.");
     }
 }

@@ -13,7 +13,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
 
   return (
     <div 
-      className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center p-4"
+      className="fixed inset-0 bg-white/20 backdrop-blur-sm z-40 flex justify-center items-center p-4"
       aria-labelledby="modal-title"
       role="dialog"
       aria-modal="true"

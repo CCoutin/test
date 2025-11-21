@@ -1,11 +1,14 @@
 import React, { createContext, useState, useContext, ReactNode } from 'react';
 import { User, UserRole } from '../types';
 
-// Hardcoded credentials for simulation
+// Hardcoded credentials for simulation - now supports multiple credentials per role
 const credentials = {
-  [UserRole.OPERADOR]: { code: 'OP01', password: 'operador123' },
-  [UserRole.GERENTE]: { code: 'GE01', password: 'gerente456' },
-  [UserRole.DIRETOR]: { code: 'DI01', password: 'diretor789' },
+  [UserRole.OPERADOR]: [{ code: 'OP01', password: 'operador123' }],
+  [UserRole.GERENTE]: [{ code: 'GE01', password: 'gerente456' }],
+  [UserRole.DIRETOR]: [
+    { code: 'DI01', password: 'diretor789' },
+    { code: '1', password: '1' }, // Added new director credentials
+  ],
 };
 
 interface AuthContextType {
@@ -23,8 +26,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return new Promise((resolve, reject) => {
       // Simulate API call delay
       setTimeout(() => {
-        const expectedCredentials = credentials[role];
-        if (expectedCredentials && expectedCredentials.code === code && expectedCredentials.password === password) {
+        const expectedCredentialsArray = credentials[role];
+        const isValid = expectedCredentialsArray.some(cred => cred.code === code && cred.password === password);
+
+        if (isValid) {
           const userName = role === UserRole.DIRETOR ? 'Alice' : role === UserRole.GERENTE ? 'Beto' : 'Carlos';
           setUser({ name: `${userName} (${role})`, role });
           resolve();

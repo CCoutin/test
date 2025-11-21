@@ -193,7 +193,7 @@ const MovementsPage: React.FC<MovementsPageProps> = ({ type }) => {
                             name="material" 
                             value={currentMovement.material} 
                             onChange={handleInputChange}
-                            className="block w-full rounded-md border-slate-300 shadow-sm pl-10 pr-4 py-2 focus:border-blue-500 focus:ring-blue-500"
+                            className="block w-full rounded-md border-2 border-transparent bg-slate-800 text-white p-2 pl-10 focus:border-blue-500 focus:outline-none sm:text-sm"
                             required
                         >
                             <option value="">Selecione um material</option>
@@ -215,7 +215,7 @@ const MovementsPage: React.FC<MovementsPageProps> = ({ type }) => {
                             name="quantidade" 
                             value={currentMovement.quantidade} 
                             onChange={handleInputChange}
-                            className="block w-full rounded-md border-slate-300 shadow-sm pl-10 py-2 focus:border-blue-500 focus:ring-blue-500"
+                            className="block w-full rounded-md border-2 border-transparent bg-slate-800 text-white p-2 pl-10 focus:border-blue-500 focus:outline-none sm:text-sm placeholder-slate-400"
                             min="1"
                             required
                         />
@@ -234,7 +234,7 @@ const MovementsPage: React.FC<MovementsPageProps> = ({ type }) => {
                             name="colaborador" 
                             value={currentMovement.colaborador} 
                             onChange={handleInputChange}
-                            className="block w-full rounded-md border-slate-300 shadow-sm pl-10 pr-4 py-2 focus:border-blue-500 focus:ring-blue-500"
+                            className="block w-full rounded-md border-2 border-transparent bg-slate-800 text-white p-2 pl-10 focus:border-blue-500 focus:outline-none sm:text-sm"
                             required
                         >
                             <option value="">Selecione um colaborador</option>
@@ -256,7 +256,8 @@ const MovementsPage: React.FC<MovementsPageProps> = ({ type }) => {
                             name="data" 
                             value={currentMovement.data} 
                             onChange={handleInputChange}
-                            className="block w-full rounded-md border-slate-300 shadow-sm pl-10 py-2 focus:border-blue-500 focus:ring-blue-500"
+                            className="block w-full rounded-md border-2 border-transparent bg-slate-800 text-white p-2 pl-10 focus:border-blue-500 focus:outline-none sm:text-sm"
+                            style={{ colorScheme: 'dark' }}
                             required
                         />
                     </div>
@@ -276,7 +277,7 @@ const MovementsPage: React.FC<MovementsPageProps> = ({ type }) => {
                                 name="notaFiscal" 
                                 value={currentMovement.notaFiscal} 
                                 onChange={handleInputChange}
-                                className="block w-full rounded-md border-slate-300 shadow-sm pl-10 py-2 focus:border-blue-500 focus:ring-blue-500"
+                                className="block w-full rounded-md border-2 border-transparent bg-slate-800 text-white p-2 pl-10 focus:border-blue-500 focus:outline-none sm:text-sm placeholder-slate-400"
                                 placeholder="Ex: 20250009"
                             />
                         </div>

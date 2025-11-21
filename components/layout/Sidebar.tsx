@@ -5,7 +5,7 @@ import { Page } from '../../App';
 import { 
     ChartBarIcon, BoxIcon, ArrowUpTrayIcon, ArrowDownTrayIcon, WrenchScrewdriverIcon, 
     BuildingStorefrontIcon, DocumentTextIcon, UsersIcon, CurrencyDollarIcon,
-    ClipboardDocumentCheckIcon, ShieldCheckIcon, ChatBubbleLeftRightIcon
+    ClipboardDocumentCheckIcon, ShieldCheckIcon, ChatBubbleLeftRightIcon, DocumentChartBarIcon
 } from '../icons/HeroIcons';
 import LogoIcon from '../icons/LogoIcon';
 
@@ -50,6 +50,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
     { page: 'inventario', icon: <ClipboardDocumentCheckIcon />, label: 'Inventário', roles: [UserRole.OPERADOR, UserRole.GERENTE, UserRole.DIRETOR] },
     { page: 'parceiros', icon: <BuildingStorefrontIcon />, label: 'Parceiros', roles: [UserRole.GERENTE, UserRole.DIRETOR] },
     { page: 'colaboradores', icon: <UsersIcon />, label: 'Colaboradores', roles: [UserRole.DIRETOR] },
+    { page: 'relatorios', icon: <DocumentChartBarIcon />, label: 'Relatórios', roles: [UserRole.GERENTE, UserRole.DIRETOR] },
     { page: 'gerenciar-acessos', icon: <ShieldCheckIcon />, label: 'Gerenciar Acessos', roles: [UserRole.DIRETOR] },
     { page: 'notas', icon: <DocumentTextIcon />, label: 'Notas Fiscais', roles: [UserRole.DIRETOR] },
     { page: 'faturamento', icon: <CurrencyDollarIcon />, label: 'Faturamento', roles: [UserRole.DIRETOR] },

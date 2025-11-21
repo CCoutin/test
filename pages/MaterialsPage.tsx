@@ -7,7 +7,7 @@ import { UserRole, Material } from '../types';
 import PencilIcon from '../components/icons/PencilIcon';
 import TrashIcon from '../components/icons/TrashIcon';
 import PlusIcon from '../components/icons/PlusIcon';
-import { SparklesIcon, BoxIcon, ExclamationTriangleIcon } from '../components/icons/HeroIcons';
+import { SparklesIcon, ExclamationTriangleIcon } from '../components/icons/HeroIcons';
 import Modal from '../components/ui/Modal';
 import { suggestSupplier, AISuggestion } from '../services/geminiService';
 
@@ -28,13 +28,12 @@ const MaterialsPage: React.FC = () => {
   const [isSuggestionModalOpen, setIsSuggestionModalOpen] = useState(false);
 
   // State for Add/Edit Form
-  const initialFormState: Omit<Material, 'id' | 'entradas' | 'foto'> & { foto?: string } = {
+  const initialFormState: Omit<Material, 'id' | 'entradas'> = {
     nome: '',
     codigoFabricante: '',
     quantidade: 0,
     armazenamento: '',
     valorUnitario: 0,
-    foto: ''
   };
   const [currentMaterial, setCurrentMaterial] = useState(initialFormState);
   const [materialToEdit, setMaterialToEdit] = useState<Material | null>(null);
@@ -84,20 +83,6 @@ const MaterialsPage: React.FC = () => {
       ...prev, 
       [name]: (name === 'quantidade' || name === 'valorUnitario') ? parseFloat(value) || 0 : value 
     }));
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-        const file = e.target.files[0];
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            setCurrentMaterial(prev => ({
-                ...prev,
-                foto: reader.result as string
-            }));
-        };
-        reader.readAsDataURL(file);
-    }
   };
   
   const isFormValid = currentMaterial.nome && currentMaterial.codigoFabricante && currentMaterial.armazenamento && currentMaterial.valorUnitario > 0;
@@ -183,12 +168,9 @@ const MaterialsPage: React.FC = () => {
                     return (
                         <tr key={material.id} className={rowClasses}>
                         <td className="p-4">
-                            <div className="flex items-center space-x-4">
-                            <img src={material.foto} alt={material.nome} className="w-12 h-12 rounded-md object-cover"/>
                             <div>
                                 <p className="font-semibold text-slate-800">{material.nome}</p>
                                 <p className="text-sm text-slate-500">{material.id}</p>
-                            </div>
                             </div>
                         </td>
                         <td className="p-4 text-sm text-slate-600 font-mono">{material.codigoFabricante}</td>
@@ -235,44 +217,26 @@ const MaterialsPage: React.FC = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                     <label htmlFor="nome" className="block text-sm font-medium text-slate-700">Nome do Material</label>
-                    <input type="text" name="nome" value={currentMaterial.nome} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" required />
+                    <input type="text" name="nome" value={currentMaterial.nome} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-2 border-transparent bg-slate-800 text-white p-2 focus:border-blue-500 focus:outline-none sm:text-sm placeholder-slate-400" required />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                      <div>
                         <label htmlFor="codigoFabricante" className="block text-sm font-medium text-slate-700">Cód. Fabricante</label>
-                        <input type="text" name="codigoFabricante" value={currentMaterial.codigoFabricante} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" required />
+                        <input type="text" name="codigoFabricante" value={currentMaterial.codigoFabricante} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-2 border-transparent bg-slate-800 text-white p-2 focus:border-blue-500 focus:outline-none sm:text-sm placeholder-slate-400" required />
                     </div>
                      <div>
                         <label htmlFor="quantidade" className="block text-sm font-medium text-slate-700">Quantidade</label>
-                        <input type="number" name="quantidade" value={currentMaterial.quantidade} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" required />
+                        <input type="number" name="quantidade" value={currentMaterial.quantidade} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-2 border-transparent bg-slate-800 text-white p-2 focus:border-blue-500 focus:outline-none sm:text-sm placeholder-slate-400" required />
                     </div>
                 </div>
                  <div className="grid grid-cols-2 gap-4">
                     <div>
                         <label htmlFor="armazenamento" className="block text-sm font-medium text-slate-700">Local</label>
-                        <input type="text" name="armazenamento" value={currentMaterial.armazenamento} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" required />
+                        <input type="text" name="armazenamento" value={currentMaterial.armazenamento} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-2 border-transparent bg-slate-800 text-white p-2 focus:border-blue-500 focus:outline-none sm:text-sm placeholder-slate-400" required />
                     </div>
                      <div>
                         <label htmlFor="valorUnitario" className="block text-sm font-medium text-slate-700">Valor Unitário (R$)</label>
-                        <input type="number" name="valorUnitario" value={currentMaterial.valorUnitario} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" min="0.01" step="0.01" required />
-                    </div>
-                </div>
-                 <div>
-                    <label className="block text-sm font-medium text-slate-700">Foto do Material</label>
-                    <div className="mt-2 flex items-center space-x-6">
-                        <div className="shrink-0">
-                            {currentMaterial.foto ? (
-                                <img src={currentMaterial.foto} alt="Pré-visualização" className="h-20 w-20 rounded-md object-cover" />
-                            ) : (
-                                <div className="h-20 w-20 rounded-md bg-slate-100 flex items-center justify-center">
-                                    <BoxIcon className="w-10 h-10 text-slate-400" />
-                                </div>
-                            )}
-                        </div>
-                        <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
-                            <span>Carregar um arquivo</span>
-                            <input id="file-upload" name="foto" type="file" className="sr-only" accept="image/*" onChange={handleFileChange} />
-                        </label>
+                        <input type="number" name="valorUnitario" value={currentMaterial.valorUnitario} onChange={handleInputChange} className="mt-1 block w-full rounded-md border-2 border-transparent bg-slate-800 text-white p-2 focus:border-blue-500 focus:outline-none sm:text-sm placeholder-slate-400" min="0.01" step="0.01" required />
                     </div>
                 </div>
                 <div className="pt-4">

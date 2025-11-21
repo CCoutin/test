@@ -78,12 +78,9 @@ const InventoryPage: React.FC = () => {
                         return (
                             <tr key={material.id} className="border-b border-slate-200 last:border-b-0">
                                 <td className="p-4">
-                                     <div className="flex items-center space-x-4">
-                                        <img src={material.foto} alt={material.nome} className="w-12 h-12 rounded-md object-cover"/>
-                                        <div>
-                                            <p className="font-semibold text-slate-800">{material.nome}</p>
-                                            <p className="text-sm text-slate-500">{material.id}</p>
-                                        </div>
+                                     <div>
+                                        <p className="font-semibold text-slate-800">{material.nome}</p>
+                                        <p className="text-sm text-slate-500">{material.id}</p>
                                     </div>
                                 </td>
                                 <td className="p-4 font-medium text-slate-700">{systemCount}</td>
@@ -93,7 +90,7 @@ const InventoryPage: React.FC = () => {
                                         value={physicalCountStr ?? ''}
                                         onChange={(e) => handleCountChange(material.id, e.target.value)}
                                         placeholder={String(systemCount)}
-                                        className="w-24 rounded-md border-slate-300 shadow-sm p-2 focus:border-blue-500 focus:ring-blue-500"
+                                        className="w-24 rounded-md border-2 border-transparent bg-slate-800 text-white p-2 focus:border-blue-500 focus:outline-none sm:text-sm placeholder-slate-400"
                                         min="0"
                                     />
                                 </td>

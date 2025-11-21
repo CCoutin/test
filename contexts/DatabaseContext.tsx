@@ -17,7 +17,7 @@ interface DatabaseContextType {
   addMovement: (movement: Omit<Movimentacao, 'id' | 'tipo'>, type: MovimentacaoTipo) => void;
   updateMovement: (updatedMovement: Movimentacao) => void;
   deleteMovement: (movementId: string) => void;
-  addMaterial: (material: Omit<Material, 'id' | 'entradas' | 'foto'> & { foto?: string }) => void;
+  addMaterial: (material: Omit<Material, 'id' | 'entradas'>) => void;
   updateMaterial: (updatedMaterial: Material) => void;
   deleteMaterial: (materialId: string) => void;
   updateMaterialStock: (materialId: string, newQuantity: number) => void;
@@ -35,13 +35,35 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   // Movement Functions
   const addMovement = (movement: Omit<Movimentacao, 'id' | 'tipo'>, type: MovimentacaoTipo) => {
+    // Find material and collaborator by name to ensure data integrity
+    const material = materials.find(m => m.nome.toLowerCase() === movement.material.toLowerCase());
+    const collaborator = collaborators.find(c => c.nome.toLowerCase() === movement.colaborador.toLowerCase());
+
+    if (!material) {
+        console.error(`Material "${movement.material}" não encontrado.`);
+        // In a real app, you'd throw an error or handle it more gracefully
+        return;
+    }
+    if (!collaborator) {
+        console.error(`Colaborador "${movement.colaborador}" não encontrado.`);
+        return;
+    }
+
     const newMovement: Movimentacao = { 
         ...movement, 
+        material: material.nome, // Use the canonical name
+        colaborador: collaborator.nome, // Use the canonical name
         id: `MOV${Date.now()}`, 
         tipo: type,
         notaFiscal: type === 'entrada' ? movement.notaFiscal : undefined,
     };
+    
     setMovements(prev => [newMovement, ...prev].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()));
+
+    // Automatically update stock
+    const quantityChange = type === 'entrada' ? movement.quantidade : -movement.quantidade;
+    const newQuantity = material.quantidade + quantityChange;
+    updateMaterialStock(material.id, newQuantity);
   };
 
   const updateMovement = (updatedMovement: Movimentacao) => {
@@ -53,12 +75,11 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   // Material Functions
-  const addMaterial = (material: Omit<Material, 'id' | 'entradas' | 'foto'> & { foto?: string }) => {
+  const addMaterial = (material: Omit<Material, 'id' | 'entradas'>) => {
     const newMaterial: Material = { 
         ...material, 
         id: `MAT${Date.now()}`, 
         entradas: material.quantidade, // Initial entries equals current quantity
-        foto: material.foto || 'https://via.placeholder.com/150/92c5fd/FFFFFF?text=Item'
     };
     setMaterials(prev => [newMaterial, ...prev]);
   };

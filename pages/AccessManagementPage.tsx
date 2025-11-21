@@ -55,7 +55,7 @@ const AccessManagementPage: React.FC = () => {
                                         value={colaborador.role}
                                         onChange={(e) => handleRoleChange(colaborador.id, e.target.value as UserRole)}
                                         disabled={isSelf}
-                                        className="rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:bg-slate-200 disabled:cursor-not-allowed"
+                                        className="rounded-md border-2 border-transparent bg-slate-800 text-white p-2 focus:border-blue-500 focus:outline-none sm:text-sm disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed"
                                     >
                                         <option value={UserRole.OPERADOR}>Operador</option>
                                         <option value={UserRole.GERENTE}>Gerente</option>

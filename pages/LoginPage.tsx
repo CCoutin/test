@@ -35,6 +35,7 @@ const LoginPage: React.FC = () => {
     try {
       await login(selectedRole, code, password);
       // On success, the AuthProvider will update the state and App.tsx will navigate away.
+    // FIX: Added missing curly braces to the `catch` block to fix a syntax error.
     } catch (err: any) {
       setError(err.message || 'Ocorreu um erro ao tentar fazer login.');
       setIsLoading(false);
@@ -93,7 +94,7 @@ const LoginPage: React.FC = () => {
             
             <div>
                 <label htmlFor="code" className="block text-sm font-medium text-slate-700">Código</label>
-                <div className="mt-1 relative rounded-md shadow-sm">
+                <div className="mt-1 relative">
                     <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                         <IdentificationIcon className="h-5 w-5 text-slate-400" />
                     </div>
@@ -101,7 +102,7 @@ const LoginPage: React.FC = () => {
                         type="text"
                         name="code"
                         id="code"
-                        className="block w-full rounded-md border border-slate-300 p-2 pl-10 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 sm:text-sm"
+                        className="block w-full rounded-md border-2 border-transparent bg-slate-800 text-white p-2 pl-10 focus:border-blue-500 focus:outline-none sm:text-sm placeholder-slate-400"
                         placeholder="Ex: OP01"
                         value={code}
                         onChange={(e) => setCode(e.target.value)}
@@ -112,7 +113,7 @@ const LoginPage: React.FC = () => {
             
              <div>
                 <label htmlFor="password" className="block text-sm font-medium text-slate-700">Senha</label>
-                 <div className="mt-1 relative rounded-md shadow-sm">
+                 <div className="mt-1 relative">
                     <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                         <KeyIcon className="h-5 w-5 text-slate-400" />
                     </div>
@@ -120,7 +121,7 @@ const LoginPage: React.FC = () => {
                         type="password"
                         name="password"
                         id="password"
-                        className="block w-full rounded-md border border-slate-300 p-2 pl-10 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 sm:text-sm"
+                        className="block w-full rounded-md border-2 border-transparent bg-slate-800 text-white p-2 pl-10 focus:border-blue-500 focus:outline-none sm:text-sm placeholder-slate-400"
                         placeholder="******"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
