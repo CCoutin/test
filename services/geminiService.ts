@@ -3,15 +3,11 @@ import { Parceiro, Movimentacao, NotaFiscal, Material, Colaborador } from '../ty
 
 // Helper para inicializar o cliente apenas quando necessário
 const getAiClient = () => {
-    // Em produção (Vite/Netlify), process.env pode não ter a chave.
-    // O padrão do Vite é expor variáveis prefixadas com VITE_ através de import.meta.as
-    const apiKey = process.env.API_KEY || (import.meta as any).env?.VITE_API_KEY;
-    
-    if (!apiKey) {
-        console.error("API Key não encontrada. Certifique-se de configurar a variável de ambiente 'VITE_API_KEY' no Netlify.");
-        throw new Error("Chave de API da IA não configurada.");
-    }
-
+    // A chave de API deve ser obtida exclusivamente de process.env.API_KEY.
+    // A verificação anterior e o fallback para VITE_API_KEY causavam uma falha na inicialização
+    // se a variável de ambiente não estivesse configurada, impedindo a aplicação de abrir.
+    // Esta implementação assume que a chave está disponível, conforme as diretrizes.
+    const apiKey = process.env.API_KEY;
     return new GoogleGenAI({ apiKey: apiKey as string });
 };
 

@@ -33,9 +33,33 @@ const PartnersPage: React.FC = () => {
     // Get user location
     useEffect(() => {
         if (navigator.geolocation) {
+            const handleGeoError = (err: GeolocationPositionError) => {
+                let message = 'Não foi possível obter sua localização.';
+                switch (err.code) {
+                    case err.PERMISSION_DENIED:
+                        message = 'Permissão de localização negada. O mapa funcionará, mas sua posição não será exibida.';
+                        break;
+                    case err.POSITION_UNAVAILABLE:
+                        message = 'Informações de localização indisponíveis no momento.';
+                        break;
+                    case err.TIMEOUT:
+                        message = 'A solicitação de localização expirou.';
+                        break;
+                }
+                setError(message);
+            };
+
             navigator.geolocation.getCurrentPosition(
-                (pos) => { setUserLocation(pos); setError(null); },
-                (err) => { setError(`Erro ao obter localização: ${err.message}`); }
+                (pos) => {
+                    setUserLocation(pos);
+                    setError(null);
+                },
+                handleGeoError,
+                {
+                    timeout: 10000,
+                    maximumAge: 60000,
+                    enableHighAccuracy: false,
+                }
             );
         } else {
             setError('Geolocalização não é suportada por este navegador.');
