@@ -28,9 +28,15 @@ const initialMessage: ChatMessage = {
   text: 'Olá! Sou o Assistente Gestor One. Agora posso registrar entradas, saídas e consumos de estoque. Tente dizer: "registrar uma entrada de 50 parafusos com a nota fiscal 12345" ou "dar baixa em 5 martelos para o Jorge".'
 };
 
+const errorMessage: ChatMessage = {
+  sender: 'ai',
+  text: 'Não foi possível iniciar o assistente de IA. Verifique se a chave de API está configurada corretamente no ambiente.'
+};
+
+
 export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { materials, movements, collaborators, partners, invoices, addMovement } = useDatabase();
-  const [messages, setMessages] = useState<ChatMessage[]>([initialMessage]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState<AIActionConfirmation | null>(null);
   const [chatSession, setChatSession] = useState<Chat | null>(null);
@@ -38,21 +44,24 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isInitialized, setIsInitialized] = useState(false);
 
   const initializeChat = useCallback(() => {
-    if (isInitialized || chatError || materials.length === 0 || collaborators.length === 0) {
+    if (isInitialized || materials.length === 0 || collaborators.length === 0) {
       return;
     }
+    setIsInitialized(true); 
+
     try {
       const session = startChat(materials, movements, collaborators, partners, invoices);
       setChatSession(session);
-      setIsInitialized(true);
       setChatError(null);
+      setMessages([initialMessage]);
     } catch (error) {
       console.error("Falha ao inicializar o chat da IA:", error);
-      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido.";
-      setChatError(errorMessage);
+      const errorText = error instanceof Error ? error.message : "Erro desconhecido.";
+      setChatError(errorText);
       setChatSession(null);
+      setMessages([errorMessage]);
     }
-  }, [isInitialized, chatError, materials, movements, collaborators, partners, invoices]);
+  }, [isInitialized, materials, movements, collaborators, partners, invoices]);
 
   const sendMessage = async (input: string) => {
     if (chatError) {
@@ -142,7 +151,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const resetChat = () => {
-    setMessages([initialMessage]);
+    setMessages([]);
     setPendingAction(null);
     setIsLoading(false);
     setChatError(null);
