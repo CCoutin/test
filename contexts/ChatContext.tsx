@@ -1,8 +1,8 @@
-import React, { createContext, useState, useContext, ReactNode, useCallback } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
 import { useDatabase } from './DatabaseContext';
-import { startChat, sendMessageToChat, sendFunctionResultToChat } from '../services/geminiService';
-import { AIActionConfirmation } from '../types';
-import { Chat } from '@google/genai';
+import { sendMessageToChat, sendFunctionResultToChat } from '../services/geminiService';
+// FIX: Alias the imported API-specific ChatMessage and define a local one for the UI to resolve the name collision and type mismatch.
+import { AIActionConfirmation, ChatMessage as ApiChatMessage } from '../types';
 
 interface ChatMessage {
   sender: 'user' | 'ai';
@@ -28,56 +28,46 @@ const initialMessage: ChatMessage = {
   text: 'Olá! Sou o Assistente Gestor One. Agora posso registrar entradas, saídas e consumos de estoque. Tente dizer: "registrar uma entrada de 50 parafusos com a nota fiscal 12345" ou "dar baixa em 5 martelos para o Jorge".'
 };
 
-const errorMessage: ChatMessage = {
-  sender: 'ai',
-  text: 'Não foi possível iniciar o assistente de IA. Verifique se a chave de API está configurada corretamente no ambiente.'
-};
-
-
 export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { materials, movements, collaborators, partners, invoices, addMovement } = useDatabase();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState<AIActionConfirmation | null>(null);
-  const [chatSession, setChatSession] = useState<Chat | null>(null);
   const [chatError, setChatError] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  
+  const getFullContext = useCallback(() => {
+    return { materials, movements, collaborators, partners, invoices };
+  }, [materials, movements, collaborators, partners, invoices]);
 
   const initializeChat = useCallback(() => {
-    if (isInitialized || materials.length === 0 || collaborators.length === 0) {
-      return;
-    }
+    if (isInitialized) return;
     setIsInitialized(true); 
-
-    try {
-      const session = startChat(materials, movements, collaborators, partners, invoices);
-      setChatSession(session);
-      setChatError(null);
-      setMessages([initialMessage]);
-    } catch (error) {
-      console.error("Falha ao inicializar o chat da IA:", error);
-      const errorText = error instanceof Error ? error.message : "Erro desconhecido.";
-      setChatError(errorText);
-      setChatSession(null);
-      setMessages([errorMessage]);
-    }
-  }, [isInitialized, materials, movements, collaborators, partners, invoices]);
+    setChatError(null);
+    setMessages([initialMessage]);
+  }, [isInitialized]);
 
   const sendMessage = async (input: string) => {
-    if (chatError) {
-      console.warn("Attempted to send message while chat is in error state:", chatError);
-      return;
-    }
-    if (!input.trim() || isLoading || !chatSession) return;
+    if (!input.trim() || isLoading) return;
 
     const userMessage: ChatMessage = { sender: 'user', text: input };
-    setMessages(prev => [...prev, userMessage]);
+    
+    // Build history from state *before* adding the new user message.
+    const historyForApi = messages
+      .slice(1) // Remove the initial welcome message
+      .map(msg => ({
+          role: msg.sender === 'user' ? 'user' : 'model',
+          parts: [{ text: msg.text }]
+      })) as ApiChatMessage[];
+
+    setMessages(prev => [...prev, userMessage]); // Update UI with user message
     setIsLoading(true);
+    setChatError(null); // Limpa erros anteriores ao tentar novamente
 
     try {
-      const aiResponse = await sendMessageToChat(chatSession, input);
+      const aiResponse = await sendMessageToChat(historyForApi, input, getFullContext());
 
-      if (aiResponse.functionCall) {
+      if (aiResponse && aiResponse.functionCall) {
         setPendingAction({ functionCall: aiResponse.functionCall, userPrompt: input });
         const { name, args } = aiResponse.functionCall;
         if (name === 'registerStockMovement') {
@@ -88,11 +78,14 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           confirmationText += '?';
           setMessages(prev => [...prev, { sender: 'ai', text: confirmationText }]);
         }
-      } else if (aiResponse.text) {
+      } else if (aiResponse && aiResponse.text) {
         setMessages(prev => [...prev, { sender: 'ai', text: aiResponse.text }]);
+      } else {
+        setMessages(prev => [...prev, { sender: 'ai', text: "Desculpe, não consegui processar sua solicitação no momento. Tente novamente." }]);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Ocorreu um erro desconhecido.";
+      setChatError(errorMessage);
       setMessages(prev => [...prev, { sender: 'ai', text: `Desculpe, ocorreu um erro: ${errorMessage}` }]);
     } finally {
       setIsLoading(false);
@@ -105,7 +98,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }
 
   const confirmAction = async () => {
-    if (!pendingAction || !chatSession) return;
+    if (!pendingAction) return;
 
     setIsLoading(true);
     const { functionCall } = pendingAction;
@@ -131,14 +124,25 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       } else {
         throw new Error("Ação desconhecida.");
       }
+      
+      const historyForApi = messages
+        .slice(1, -1) // Correctly build history up to the user's prompt
+        .map(msg => ({
+            role: msg.sender === 'user' ? 'user' : 'model',
+            parts: [{ text: msg.text }]
+        })) as ApiChatMessage[];
 
-      const finalAiResponse = await sendFunctionResultToChat(chatSession, functionCall, resultMessage);
+      const finalAiResponse = await sendFunctionResultToChat(historyForApi, pendingAction, resultMessage, getFullContext());
 
-      if (finalAiResponse.text) {
+      if (finalAiResponse && finalAiResponse.text) {
         setMessages(prev => [...prev, { sender: 'ai', text: finalAiResponse.text }]);
+      } else {
+         setMessages(prev => [...prev, { sender: 'ai', text: "Ação confirmada." }]);
       }
     } catch (e: any) {
-      setMessages(prev => [...prev, { sender: 'ai', text: `Falha na execução: ${e.message}` }]);
+        const errorMessage = e instanceof Error ? e.message : "Ocorreu um erro desconhecido.";
+        setChatError(errorMessage);
+        setMessages(prev => [...prev, { sender: 'ai', text: `Falha na execução: ${errorMessage}` }]);
     } finally {
       setPendingAction(null);
       setIsLoading(false);
@@ -156,7 +160,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(false);
     setChatError(null);
     setIsInitialized(false);
-    setChatSession(null);
+    initializeChat();
   };
 
   const value = {

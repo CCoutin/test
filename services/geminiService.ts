@@ -1,17 +1,7 @@
-import { GoogleGenAI, Type, FunctionDeclaration, FunctionCall, Chat, Part } from "@google/genai";
-import { Parceiro, Movimentacao, NotaFiscal, Material, Colaborador } from '../types';
+import { GoogleGenAI, Type, FunctionDeclaration, Content, Part, FunctionCall } from "@google/genai";
+import { Parceiro, Movimentacao, NotaFiscal, Material, Colaborador, AIActionConfirmation, ChatMessage } from '../types';
 
-// Helper para inicializar o cliente
-const getAiClient = () => {
-    const apiKey = process.env.API_KEY;
-    // Adiciona uma verificação explícita para a chave de API.
-    // Lançar um erro aqui permite que as funções de chamada capturem a falha
-    // e exibam uma mensagem de erro controlada, em vez de deixar a aplicação quebrar.
-    if (!apiKey) {
-        throw new Error("A chave de API do Gemini não foi configurada no ambiente.");
-    }
-    return new GoogleGenAI({ apiKey });
-};
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export interface AISuggestion {
     recommendedPartnerId: string;
@@ -23,40 +13,70 @@ export interface AIRevenueForecast {
     justification: string;
 }
 
-export interface ChatMessage {
-    role: 'user' | 'model';
-    parts: { text: string }[];
-}
-
 export interface AIChatResponse {
     text?: string;
     functionCall?: FunctionCall;
 }
 
-
-const forecastRevenueSchema = {
-    type: Type.OBJECT,
-    properties: {
-        forecastValue: {
-            type: Type.NUMBER,
-            description: 'O valor numérico previsto para o faturamento do próximo mês.',
+const registerStockMovement: FunctionDeclaration = {
+    name: 'registerStockMovement',
+    description: 'Registra uma nova movimentação de estoque: entrada, saída ou consumo de material.',
+    parameters: {
+        type: Type.OBJECT,
+        properties: {
+            materialName: { type: Type.STRING, description: 'O nome exato do material a ser movimentado.' },
+            quantity: { type: Type.NUMBER, description: 'A quantidade de itens a ser movimentada.' },
+            collaboratorName: { type: Type.STRING, description: 'O nome exato do colaborador que está realizando a movimentação.' },
+            type: { type: Type.STRING, description: 'O tipo de movimentação.', enum: ['entrada', 'saida', 'consumo'] },
+            invoiceNumber: { type: Type.STRING, description: 'O número da nota fiscal associada à entrada. Opcional.' }
         },
-        justification: {
-            type: Type.STRING,
-            description: 'Uma análise concisa explicando a previsão com base nos dados históricos, tendências ou sazonalidades observadas.',
-        },
+        required: ['materialName', 'quantity', 'collaboratorName', 'type'],
     },
-    required: ['forecastValue', 'justification'],
+};
+
+const getSystemInstruction = (context: {
+        materials: Material[],
+        movements: Movimentacao[],
+        collaborators: Colaborador[],
+        partners: Parceiro[],
+        invoices: NotaFiscal[],
+    }) => {
+    const dataContext = `
+        **Materiais em Estoque:**
+        ${JSON.stringify(context.materials.map(m => ({ id: m.id, nome: m.nome, quantidade: m.quantidade })), null, 2)}
+
+        **Colaboradores:**
+        ${JSON.stringify(context.collaborators.map(c => ({ id: c.id, nome: c.nome })), null, 2)}
+    `;
+
+    return `
+        Você é o "Assistente Gestor One", um analista de dados e negócios sênior para uma revendedora de ferramentas.
+        Sua principal função é analisar os dados da empresa para responder a perguntas e EXECUTAR AÇÕES.
+
+        Suas capacidades são:
+        1.  **Análise de Dados:** Responder perguntas complexas cruzando informações de materiais, movimentações, notas fiscais, parceiros e colaboradores.
+        2.  **Execução de Ações:** Você pode registrar novas movimentações de estoque (entradas, saídas e consumos) usando a ferramenta 'registerStockMovement'.
+        
+        Regras de Interação:
+        - Mantenha o contexto da conversa. Se você precisar de mais informações para completar uma ação, peça ao usuário.
+        - Ao receber um pedido para registrar uma movimentação, utilize a ferramenta 'registerStockMovement'.
+        - Use OS NOMES EXATOS dos materiais e colaboradores disponíveis nos dados. Seja preciso.
+        - Se um nome for ambíguo ou não existir, peça para esclarecer.
+        - **Nunca invente informações.** Baseie-se apenas nos dados fornecidos.
+
+        Regras de Resposta:
+        - Responda de forma clara, objetiva e profissional, mas amigável.
+        - Utilize formatação Markdown (negrito, listas).
+        - A data de hoje é ${new Date().toLocaleDateString('pt-BR')}.
+
+        --- DADOS DA EMPRESA (Use como contexto principal) ---
+        ${dataContext}
+        --- FIM DOS DADOS ---
+    `;
 };
 
 export const suggestSupplier = async (materialName: string, partners: Parceiro[], movements: Movimentacao[], invoices: NotaFiscal[]): Promise<AISuggestion> => {
-    
-    const ai = getAiClient();
-
-    // 1. Build a map for quick invoice lookup
     const invoiceMap = new Map(invoices.map(inv => [inv.numero, inv]));
-
-    // 2. Aggregate historical purchase data for the specific material
     const purchaseHistory: { [partnerId: string]: { totalQuantity: number; totalValue: number; purchaseCount: number; lastPurchaseDate: string } } = {};
 
     movements
@@ -64,7 +84,7 @@ export const suggestSupplier = async (materialName: string, partners: Parceiro[]
         .forEach(mov => {
             const invoice = invoiceMap.get(mov.notaFiscal!);
             if (invoice) {
-                const item = invoice.itens.find(i => i.materialId === (mov as any).materialId || i.nome === materialName); // Fallback to name if id not on mov
+                const item = invoice.itens.find(i => i.materialId === (mov as any).materialId || i.nome === materialName);
                 const value = mov.quantidade * (item?.valorUnitario || 0);
 
                 if (!purchaseHistory[invoice.parceiroId]) {
@@ -80,7 +100,6 @@ export const suggestSupplier = async (materialName: string, partners: Parceiro[]
             }
         });
 
-    // 3. Format partner and historical data for the prompt
     const partnerInfo = partners.map(p => {
         const history = purchaseHistory[p.id];
         let historyString = "Sem histórico de compra para este item.";
@@ -91,229 +110,112 @@ export const suggestSupplier = async (materialName: string, partners: Parceiro[]
         return `ID: ${p.id}, Nome: ${p.nome}, Cidade: ${p.cidade}, UF: ${p.uf}. Histórico: ${historyString}`;
     }).join('\n');
 
-
     const partnerIds = partners.map(p => p.id);
-
-    const suggestSupplierSchemaWithEnum = {
+    const suggestSupplierSchema = {
         type: Type.OBJECT,
         properties: {
-            recommendedPartnerId: {
-                type: Type.STRING,
-                description: 'O ID do parceiro recomendado. Deve ser estritamente um dos IDs fornecidos na lista.',
-                enum: partnerIds,
-            },
-            justification: {
-                type: Type.STRING,
-                description: 'Uma explicação concisa do porquê este parceiro é a melhor escolha, considerando preço, histórico de compras e logística.',
-            },
+            recommendedPartnerId: { type: Type.STRING, description: 'O ID do parceiro recomendado.', enum: partnerIds },
+            justification: { type: Type.STRING, description: 'Explicação da recomendação.' },
         },
         required: ['recommendedPartnerId', 'justification'],
     };
+    const prompt = `Analise os fornecedores para o item "${materialName}":\n${partnerInfo}\n\nRecomende o melhor fornecedor, considerando preço, histórico e logística. O ID deve ser um de: ${partnerIds.join(', ')}.`;
 
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: { responseMimeType: "application/json", responseSchema: suggestSupplierSchema }
+    });
 
-    const prompt = `
-        Você é um analista de compras sênior. Sua tarefa é recomendar o melhor fornecedor para comprar o item "${materialName}".
-
-        Analise a lista de fornecedores disponíveis e seus respectivos históricos de compra para este item específico:
-        ${partnerInfo}
-
-        Com base em todos os dados fornecidos (preço médio, histórico de relacionamento/confiabilidade e logística/proximidade), qual é a melhor opção de fornecedor?
-        
-        Forneça o ID do parceiro recomendado e uma justificativa clara e objetiva para sua escolha, mencionando os fatores que mais pesaram na sua decisão.
-        O ID do parceiro deve ser estritamente um dos seguintes: ${partnerIds.join(', ')}.
-    `;
-
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: suggestSupplierSchemaWithEnum,
-                systemInstruction: "Você é um especialista em otimização da cadeia de suprimentos. Sua função é analisar dados históricos e geográficos para recomendar o fornecedor mais vantajoso, equilibrando custo, confiança e eficiência logística. Responda apenas com o JSON estruturado."
-            },
-        });
-        
-        const jsonText = response.text.trim();
-        const parsedJson = JSON.parse(jsonText);
-        
-        return parsedJson as AISuggestion;
-
-    } catch (error) {
-        console.error("Erro ao chamar a API Gemini:", error);
-        throw new Error("Não foi possível obter uma sugestão da IA. Verifique a chave de API.");
-    }
+    return JSON.parse(response.text || '{}');
 };
-
 
 export const forecastNextMonthRevenue = async (monthlyRevenue: { month: string; revenue: number }[]): Promise<AIRevenueForecast> => {
-    
-    const ai = getAiClient();
-
     const revenueData = monthlyRevenue.map(d => `${d.month}: ${d.revenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`).join(', ');
-
-    const prompt = `
-        Analise os seguintes dados de faturamento mensal de uma empresa de ferramentas:
-        ${revenueData}.
-        
-        Com base nesses dados históricos, preveja o faturamento para o próximo mês. 
-        Forneça o valor previsto e uma breve justificativa para sua previsão, considerando tendências e sazonalidades.
-    `;
-
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: forecastRevenueSchema,
-                systemInstruction: "Você é um analista financeiro especialista em previsão de faturamento para empresas de varejo e distribuição."
-            },
-        });
-        
-        const jsonText = response.text.trim();
-        const parsedJson = JSON.parse(jsonText);
-        
-        return parsedJson as AIRevenueForecast;
-
-    } catch (error) {
-        console.error("Erro ao chamar a API Gemini:", error);
-        throw new Error("Não foi possível obter uma previsão da IA. Verifique a chave de API.");
-    }
-};
-
-const registerStockMovement: FunctionDeclaration = {
-    name: 'registerStockMovement',
-    description: 'Registra uma nova movimentação de estoque: entrada, saída ou consumo de material.',
-    parameters: {
+    const prompt = `Analise os dados de faturamento: ${revenueData}. Preveja o faturamento para o próximo mês.`;
+    const forecastRevenueSchema = {
         type: Type.OBJECT,
         properties: {
-            materialName: {
-                type: Type.STRING,
-                description: 'O nome exato do material a ser movimentado. Deve corresponder a um item da lista de materiais.',
-            },
-            quantity: {
-                type: Type.NUMBER,
-                description: 'A quantidade de itens a ser movimentada. Deve ser um número inteiro positivo.',
-            },
-            collaboratorName: {
-                type: Type.STRING,
-                description: 'O nome exato do colaborador que está realizando a movimentação. Deve corresponder a um colaborador da lista.',
-            },
-            type: {
-                type: Type.STRING,
-                description: 'O tipo de movimentação. Deve ser "entrada", "saida" ou "consumo".',
-                enum: ['entrada', 'saida', 'consumo'],
-            },
-            invoiceNumber: {
-                type: Type.STRING,
-                description: 'O número da nota fiscal associada à entrada. Opcional e usado apenas para o tipo "entrada".',
-            }
+            forecastValue: { type: Type.NUMBER, description: 'O valor numérico previsto.' },
+            justification: { type: Type.STRING, description: 'A justificativa para a previsão.' },
         },
-        required: ['materialName', 'quantity', 'collaboratorName', 'type'],
-    },
-};
+        required: ['forecastValue', 'justification'],
+    };
 
-export const startChat = (
-    materials: Material[],
-    movements: Movimentacao[],
-    collaborators: Colaborador[],
-    partners: Parceiro[],
-    invoices: NotaFiscal[],
-): Chat => {
-    const ai = getAiClient();
-
-    const dataContext = `
-        **Materiais em Estoque:**
-        ${JSON.stringify(materials.map(m => ({ id: m.id, nome: m.nome, quantidade: m.quantidade })), null, 2)}
-
-        **Colaboradores:**
-        ${JSON.stringify(collaborators.map(c => ({ id: c.id, nome: c.nome })), null, 2)}
-        
-        **Movimentações de Estoque (Histórico):**
-        ${JSON.stringify(movements, null, 2)}
-
-        **Parceiros (Fornecedores):**
-        ${JSON.stringify(partners, null, 2)}
-
-        **Notas Fiscais:**
-        ${JSON.stringify(invoices, null, 2)}
-    `;
-
-    const systemInstruction = `
-        Você é o "Assistente Gestor One", um analista de dados e negócios sênior para uma revendedora de ferramentas.
-        Sua principal função é analisar os dados da empresa para responder a perguntas e EXECUTAR AÇÕES.
-
-        Suas capacidades são:
-        1.  **Análise de Dados:** Responder perguntas complexas cruzando informações de materiais, movimentações, notas fiscais, parceiros e colaboradores.
-        2.  **Execução de Ações:** Você pode registrar novas movimentações de estoque (entradas, saídas e consumos) usando a ferramenta 'registerStockMovement'.
-        
-        Regras de Interação:
-        - Mantenha o contexto da conversa. Se você precisar de mais informações para completar uma ação (ex: nome do colaborador), peça ao usuário e aguarde a resposta na próxima mensagem para continuar a tarefa original.
-        - Ao receber um pedido para registrar uma movimentação (ex: "fazer entrada", "dar baixa", "registrar consumo", "anotar saída"), utilize a ferramenta 'registerStockMovement'.
-        - Para ENTRADAS, se o colaborador não for especificado, assuma que foi 'Carlos' (o estoquista). Pergunte sobre a nota fiscal se for relevante.
-        - Use OS NOMES EXATOS dos materiais e colaboradores disponíveis nos dados. Seja preciso.
-        - Se um nome for ambíguo ou não existir, peça ao usuário para esclarecer.
-        - **Nunca invente informações.** Baseie-se apenas nos dados fornecidos.
-
-        Regras de Resposta:
-        - Responda de forma clara, objetiva e profissional, mas amigável.
-        - Utilize formatação Markdown (negrito, listas) para melhor legibilidade.
-        - A data de hoje é ${new Date().toLocaleDateString('pt-BR')}.
-
-        --- DADOS DA EMPRESA (Use como contexto principal) ---
-        ${dataContext}
-        --- FIM DOS DADOS ---
-    `;
-    
-    const chat = ai.chats.create({
+    const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        config: {
-            systemInstruction,
-            tools: [{ functionDeclarations: [registerStockMovement] }]
-        },
+        contents: prompt,
+        config: { responseMimeType: "application/json", responseSchema: forecastRevenueSchema }
     });
     
-    return chat;
+    return JSON.parse(response.text || '{}');
 };
 
 export const sendMessageToChat = async (
-    chat: Chat,
+    history: ChatMessage[],
     message: string,
-): Promise<AIChatResponse> => {
-    try {
-        const response = await chat.sendMessage({ message });
-        const functionCalls = response.functionCalls;
-        if (functionCalls && functionCalls.length > 0) {
-            return { functionCall: functionCalls[0] };
-        }
-        return { text: response.text };
-    } catch (error) {
-        console.error("Erro ao enviar mensagem para a IA:", error);
-        throw new Error("Falha ao comunicar com o assistente.");
+    context: {
+        materials: Material[],
+        movements: Movimentacao[],
+        collaborators: Colaborador[],
+        partners: Parceiro[],
+        invoices: NotaFiscal[],
     }
+): Promise<AIChatResponse> => {
+    const chat = ai.chats.create({
+        model: 'gemini-2.5-flash',
+        config: {
+            systemInstruction: getSystemInstruction(context),
+            tools: [{ functionDeclarations: [registerStockMovement] }]
+        },
+        history: history.map(h => ({
+            role: h.role,
+            parts: h.parts
+        })),
+    });
+
+    const response = await chat.sendMessage({ message });
+    const functionCalls = response.functionCalls;
+
+    if (functionCalls && functionCalls.length > 0) {
+        return { functionCall: functionCalls[0] };
+    }
+    return { text: response.text };
 };
 
 export const sendFunctionResultToChat = async (
-    chat: Chat,
-    functionCall: FunctionCall,
-    functionResponse: string
-): Promise<AIChatResponse> => {
-     try {
-        const functionResponsePart: Part = {
-            functionResponse: {
-                name: functionCall.name,
-                response: {
-                    result: functionResponse,
-                },
-            },
-        };
-
-        const response = await chat.sendMessage({ message: [functionResponsePart] });
-        
-        return { text: response.text };
-    } catch (error) {
-        console.error("Erro ao enviar resultado da função para a IA:", error);
-        throw new Error("Falha ao comunicar com o assistente após executar a ação.");
+    history: ChatMessage[],
+    pendingAction: AIActionConfirmation,
+    functionResponse: string,
+    context: {
+        materials: Material[],
+        movements: Movimentacao[],
+        collaborators: Colaborador[],
+        partners: Parceiro[],
+        invoices: NotaFiscal[],
     }
-}
+): Promise<AIChatResponse> => {
+    const { functionCall } = pendingAction;
+    const chat = ai.chats.create({
+        model: 'gemini-2.5-flash',
+        config: {
+            systemInstruction: getSystemInstruction(context),
+            tools: [{ functionDeclarations: [registerStockMovement] }]
+        },
+        history: [
+            ...history.map(h => ({ role: h.role, parts: h.parts })),
+            { role: 'model', parts: [{ functionCall: functionCall }] }
+        ] as Content[],
+    });
+
+    const response = await chat.sendMessage({ 
+        message: [{
+            functionResponse: { 
+                name: functionCall.name, 
+                response: { result: functionResponse } 
+            }
+        }] 
+    });
+    
+    return { text: response.text };
+};

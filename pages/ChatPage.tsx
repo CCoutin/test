@@ -1,3 +1,4 @@
+
 // pages/ChatPage.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useChat } from '../contexts/ChatContext';
@@ -31,8 +32,9 @@ const ChatPage: React.FC = () => {
         e.preventDefault();
         if (!input.trim()) return;
         
-        await sendMessage(input);
-        setInput('');
+        const messageToSend = input;
+        setInput(''); // Limpa o input imediatamente para melhor UX
+        await sendMessage(messageToSend);
     };
 
     const handleConfirmAction = async () => {

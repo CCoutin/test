@@ -86,3 +86,9 @@ export interface AIActionConfirmation {
   functionCall: FunctionCall;
   userPrompt: string;
 }
+
+// FIX: Add ChatMessage type for API communication.
+export interface ChatMessage {
+    role: 'user' | 'model';
+    parts: { text: string }[];
+}
