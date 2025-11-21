@@ -62,7 +62,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     setMessages(prev => [...prev, userMessage]); // Update UI with user message
     setIsLoading(true);
-    setChatError(null); // Limpa erros anteriores ao tentar novamente
+    // setChatError(null); // Don't clear global error here to avoid flashing, just try anyway.
 
     try {
       const aiResponse = await sendMessageToChat(historyForApi, input, getFullContext());
@@ -85,8 +85,9 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Ocorreu um erro desconhecido.";
-      setChatError(errorMessage);
-      setMessages(prev => [...prev, { sender: 'ai', text: `Desculpe, ocorreu um erro: ${errorMessage}` }]);
+      // Don't lock the UI with setChatError, just show the message.
+      // setChatError(errorMessage); 
+      setMessages(prev => [...prev, { sender: 'ai', text: `Erro de comunicação: ${errorMessage}. Verifique sua conexão ou chave de API e tente novamente.` }]);
     } finally {
       setIsLoading(false);
     }
@@ -141,7 +142,8 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     } catch (e: any) {
         const errorMessage = e instanceof Error ? e.message : "Ocorreu um erro desconhecido.";
-        setChatError(errorMessage);
+        // Don't lock UI
+        // setChatError(errorMessage);
         setMessages(prev => [...prev, { sender: 'ai', text: `Falha na execução: ${errorMessage}` }]);
     } finally {
       setPendingAction(null);
