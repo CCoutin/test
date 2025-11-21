@@ -13,10 +13,15 @@ const ChatPage: React.FC = () => {
         confirmAction, 
         cancelAction, 
         resetChat,
-        chatError
+        chatError,
+        initializeChat
     } = useChat();
     const [input, setInput] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        initializeChat();
+    }, [initializeChat]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
