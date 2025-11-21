@@ -1,5 +1,12 @@
+
 // types.ts
-import { FunctionCall } from '@google/genai';
+
+// Removed direct import from @google/genai to prevent load errors if the module export is missing or incompatible in this environment.
+// Define a local compatible interface instead.
+export interface FunctionCall {
+    name: string;
+    args: any;
+}
 
 export enum UserRole {
   OPERADOR = 'Operador',

@@ -1,7 +1,16 @@
-import { GoogleGenAI, Type, FunctionDeclaration, Content, Part, FunctionCall } from "@google/genai";
-import { Parceiro, Movimentacao, NotaFiscal, Material, Colaborador, AIActionConfirmation, ChatMessage } from '../types';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
+import { Parceiro, Movimentacao, NotaFiscal, Material, Colaborador, AIActionConfirmation, ChatMessage, FunctionCall } from '../types';
+
+// Helper para inicializar o cliente sob demanda, evitando crash no load da página
+// Checks if process is defined to prevent ReferenceError in browser environments without polyfills
+const getAiClient = () => {
+    const apiKey = typeof process !== 'undefined' ? process.env.API_KEY : '';
+    if (!apiKey) {
+        console.warn("API_KEY not found in process.env");
+    }
+    return new GoogleGenAI({ apiKey: apiKey || '' });
+};
 
 export interface AISuggestion {
     recommendedPartnerId: string;
@@ -121,6 +130,7 @@ export const suggestSupplier = async (materialName: string, partners: Parceiro[]
     };
     const prompt = `Analise os fornecedores para o item "${materialName}":\n${partnerInfo}\n\nRecomende o melhor fornecedor, considerando preço, histórico e logística. O ID deve ser um de: ${partnerIds.join(', ')}.`;
 
+    const ai = getAiClient();
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: prompt,
@@ -142,6 +152,7 @@ export const forecastNextMonthRevenue = async (monthlyRevenue: { month: string; 
         required: ['forecastValue', 'justification'],
     };
 
+    const ai = getAiClient();
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: prompt,
@@ -162,6 +173,7 @@ export const sendMessageToChat = async (
         invoices: NotaFiscal[],
     }
 ): Promise<AIChatResponse> => {
+    const ai = getAiClient();
     const chat = ai.chats.create({
         model: 'gemini-2.5-flash',
         config: {
@@ -178,7 +190,7 @@ export const sendMessageToChat = async (
     const functionCalls = response.functionCalls;
 
     if (functionCalls && functionCalls.length > 0) {
-        return { functionCall: functionCalls[0] };
+        return { functionCall: functionCalls[0] as FunctionCall };
     }
     return { text: response.text };
 };
@@ -196,16 +208,21 @@ export const sendFunctionResultToChat = async (
     }
 ): Promise<AIChatResponse> => {
     const { functionCall } = pendingAction;
+    const ai = getAiClient();
+    
+    // Construct history carefully to match API expectations
+    const apiHistory = [
+        ...history.map(h => ({ role: h.role, parts: h.parts })),
+        { role: 'model', parts: [{ functionCall: functionCall as any }] }
+    ];
+
     const chat = ai.chats.create({
         model: 'gemini-2.5-flash',
         config: {
             systemInstruction: getSystemInstruction(context),
             tools: [{ functionDeclarations: [registerStockMovement] }]
         },
-        history: [
-            ...history.map(h => ({ role: h.role, parts: h.parts })),
-            { role: 'model', parts: [{ functionCall: functionCall }] }
-        ] as Content[],
+        history: apiHistory,
     });
 
     const response = await chat.sendMessage({ 
