@@ -47,23 +47,35 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setMessages([initialMessage]);
   }, [isInitialized]);
 
+  const handleChatError = (error: unknown) => {
+    const errorMessage = error instanceof Error ? error.message : "Ocorreu um erro desconhecido.";
+    let friendlyMessage = `Erro: ${errorMessage}`;
+
+    // Detecta erro específico de falta de API KEY e fornece instruções
+    if (errorMessage.includes("API key") || errorMessage.includes("API_KEY")) {
+        friendlyMessage = `⚠️ **Configuração Necessária no Netlify**\n\nA conexão com a IA falhou porque a **API Key** não foi encontrada.\n\n**Como resolver:**\n1. Obtenha sua chave aqui: <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-200 hover:text-white underline">Google AI Studio</a>\n2. Acesse o painel do seu site no Netlify.\n3. Vá em **Site configuration > Environment variables**.\n4. Adicione uma variável chamada \`API_KEY\` com o valor da sua chave.\n5. Faça um novo deploy do site.`;
+    } else {
+        friendlyMessage = `Erro de comunicação: ${errorMessage}. Tente novamente em instantes.`;
+    }
+
+    setMessages(prev => [...prev, { sender: 'ai', text: friendlyMessage }]);
+  };
+
   const sendMessage = async (input: string) => {
     if (!input.trim() || isLoading) return;
 
     const userMessage: ChatMessage = { sender: 'user', text: input };
     
-    // Build history from state *before* adding the new user message.
     const historyForApi = messages
-      .slice(1) // Remove the initial welcome message
+      .slice(1)
+      .filter(msg => !msg.text.startsWith('⚠️')) // Filtra mensagens de erro do histórico para não confundir a IA
       .map(msg => ({
           role: msg.sender === 'user' ? 'user' : 'model',
           parts: [{ text: msg.text }]
       })) as ApiChatMessage[];
 
-    setMessages(prev => [...prev, userMessage]); // Update UI with user message
+    setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
-    // We deliberately do not clear chatError here to prevent flickering if it was set, 
-    // but we also don't set it on error to prevent locking.
 
     try {
       const aiResponse = await sendMessageToChat(historyForApi, input, getFullContext());
@@ -85,9 +97,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setMessages(prev => [...prev, { sender: 'ai', text: "Desculpe, não consegui processar sua solicitação no momento. Tente novamente." }]);
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Ocorreu um erro desconhecido.";
-      // Do not lock the UI with setChatError, just show the message to allow retry.
-      setMessages(prev => [...prev, { sender: 'ai', text: `Erro de comunicação: ${errorMessage}. Verifique sua conexão ou chave de API e tente novamente.` }]);
+      handleChatError(error);
     } finally {
       setIsLoading(false);
     }
@@ -127,7 +137,8 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       
       const historyForApi = messages
-        .slice(1, -1) // Correctly build history up to the user's prompt
+        .slice(1, -1)
+        .filter(msg => !msg.text.startsWith('⚠️'))
         .map(msg => ({
             role: msg.sender === 'user' ? 'user' : 'model',
             parts: [{ text: msg.text }]
@@ -140,10 +151,14 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       } else {
          setMessages(prev => [...prev, { sender: 'ai', text: "Ação confirmada." }]);
       }
-    } catch (e: any) {
-        const errorMessage = e instanceof Error ? e.message : "Ocorreu um erro desconhecido.";
-        // Don't lock UI, just inform user
-        setMessages(prev => [...prev, { sender: 'ai', text: `Falha na execução: ${errorMessage}` }]);
+    } catch (error) {
+        // Se o erro for de API Key na confirmação, também mostramos o help
+        const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+        if (errorMessage.includes("API key") || errorMessage.includes("API_KEY")) {
+            handleChatError(error);
+        } else {
+             setMessages(prev => [...prev, { sender: 'ai', text: `Falha na execução: ${errorMessage}` }]);
+        }
     } finally {
       setPendingAction(null);
       setIsLoading(false);

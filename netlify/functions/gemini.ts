@@ -6,7 +6,7 @@ import { Parceiro, Movimentacao, NotaFiscal, Material, Colaborador, AIActionConf
 const getAiClient = () => {
     const apiKey = process.env.API_KEY;
     if (!apiKey) {
-        throw new Error("API key not valid. Please set the API_KEY environment variable in Netlify.");
+        throw new Error("API_KEY is missing. Get it at: https://aistudio.google.com/app/apikey");
     }
     return new GoogleGenAI({ apiKey });
 };
@@ -64,8 +64,19 @@ const getSystemInstruction = (context: any) => {
 
 
 const handler: Handler = async (event) => {
+    const headers = {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS'
+    };
+
+    if (event.httpMethod === 'OPTIONS') {
+        return { statusCode: 200, headers, body: '' };
+    }
+
     if (event.httpMethod !== 'POST') {
-        return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
+        return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
     }
 
     try {
@@ -88,9 +99,9 @@ const handler: Handler = async (event) => {
                 const functionCalls = response.functionCalls;
 
                 if (functionCalls && functionCalls.length > 0) {
-                    return { statusCode: 200, body: JSON.stringify({ functionCall: functionCalls[0] }) };
+                    return { statusCode: 200, headers, body: JSON.stringify({ functionCall: functionCalls[0] }) };
                 }
-                return { statusCode: 200, body: JSON.stringify({ text: response.text }) };
+                return { statusCode: 200, headers, body: JSON.stringify({ text: response.text }) };
             }
 
             case 'chat_function_result': {
@@ -115,7 +126,7 @@ const handler: Handler = async (event) => {
                 };
 
                 const response = await chat.sendMessage({ message: [functionResponsePart] });
-                return { statusCode: 200, body: JSON.stringify({ text: response.text }) };
+                return { statusCode: 200, headers, body: JSON.stringify({ text: response.text }) };
             }
             
             case 'suggestSupplier': {
@@ -172,7 +183,7 @@ const handler: Handler = async (event) => {
                     config: { responseMimeType: "application/json", responseSchema: suggestSupplierSchemaWithEnum }
                 });
 
-                return { statusCode: 200, body: response.text };
+                return { statusCode: 200, headers, body: response.text };
             }
 
             case 'forecastRevenue': {
@@ -194,16 +205,15 @@ const handler: Handler = async (event) => {
                     config: { responseMimeType: "application/json", responseSchema: forecastRevenueSchema }
                 });
 
-                return { statusCode: 200, body: response.text };
+                return { statusCode: 200, headers, body: response.text };
             }
 
             default:
-                return { statusCode: 400, body: JSON.stringify({ error: 'Invalid request type' }) };
+                return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid request type' }) };
         }
     } catch (error: any) {
         console.error('Error in Netlify function:', error);
-        // Return a 500 error with a JSON body so the client can handle it gracefully
-        return { statusCode: 500, body: JSON.stringify({ error: error.message || 'Internal Server Error' }) };
+        return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: error.message || 'Internal Server Error' }) };
     }
 };
 
