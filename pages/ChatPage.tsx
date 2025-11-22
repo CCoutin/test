@@ -41,6 +41,30 @@ const ChatPage: React.FC = () => {
         await confirmAction();
     }
 
+    // Função simples para formatar texto (Negrito e Links)
+    const formatMessage = (text: string, isUser: boolean) => {
+        // 1. Segurança básica: Escapar HTML para evitar injeção de scripts
+        let formatted = text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+
+        // 2. Formatar Negrito: **texto** -> <strong>texto</strong>
+        formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+        // 3. Formatar Links Markdown: [texto](url) -> <a href="url">texto</a>
+        // Ajusta a cor do link baseado em quem enviou (Usuário = fundo azul / IA = fundo cinza)
+        const linkClass = isUser 
+            ? "underline text-blue-100 hover:text-white" 
+            : "underline text-blue-600 hover:text-blue-800";
+            
+        formatted = formatted.replace(
+            /\[(.*?)\]\((.*?)\)/g,
+            `<a href="$2" target="_blank" rel="noopener noreferrer" class="${linkClass}">$1</a>`
+        );
+
+        return formatted;
+    };
 
     return (
         <div className="flex flex-col h-full max-h-[calc(100vh-8rem)] bg-white rounded-lg shadow-md">
@@ -71,7 +95,10 @@ const ChatPage: React.FC = () => {
                                 ? 'bg-blue-600 text-white'
                                 : 'bg-slate-200 text-slate-800'
                         }`}>
-                            <p className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: msg.text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }}></p>
+                            <p 
+                                className="whitespace-pre-wrap" 
+                                dangerouslySetInnerHTML={{ __html: formatMessage(msg.text, msg.sender === 'user') }}
+                            ></p>
                         </div>
                     </div>
                 ))}

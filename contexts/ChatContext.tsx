@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
 import { useDatabase } from './DatabaseContext';
 import { sendMessageToChat, sendFunctionResultToChat } from '../services/geminiService';
@@ -51,9 +52,11 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const errorMessage = error instanceof Error ? error.message : "Ocorreu um erro desconhecido.";
     let friendlyMessage = `Erro: ${errorMessage}`;
 
-    // Detecta erro específico de falta de API KEY e fornece instruções
+    // Detecta erro específico de falta de API KEY e fornece instruções com link Markdown
     if (errorMessage.includes("API key") || errorMessage.includes("API_KEY")) {
-        friendlyMessage = `⚠️ **Configuração Necessária no Netlify**\n\nA conexão com a IA falhou porque a **API Key** não foi encontrada.\n\n**Como resolver:**\n1. Obtenha sua chave aqui: <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-200 hover:text-white underline">Google AI Studio</a>\n2. Acesse o painel do seu site no Netlify.\n3. Vá em **Site configuration > Environment variables**.\n4. Adicione uma variável chamada \`API_KEY\` com o valor da sua chave.\n5. Faça um novo deploy do site.`;
+        friendlyMessage = `⚠️ **Configuração Necessária**\n\nA conexão com a IA falhou porque a **API Key** não foi encontrada no servidor.\n\n**Como resolver:**\n1. Obtenha sua chave aqui: [Google AI Studio](https://aistudio.google.com/app/apikey)\n2. Acesse o painel do seu site no Netlify.\n3. Vá em **Site configuration > Environment variables**.\n4. Adicione uma variável chamada \`API_KEY\` com o valor da sua chave.\n5. Faça um novo deploy do site.`;
+    } else if (errorMessage.includes("45000ms")) {
+        friendlyMessage = `⚠️ **Tempo limite excedido**\n\nA IA demorou muito para responder. Isso pode acontecer na primeira execução após um tempo inativo (cold start). Por favor, tente enviar a mensagem novamente.`;
     } else {
         friendlyMessage = `Erro de comunicação: ${errorMessage}. Tente novamente em instantes.`;
     }
