@@ -1,7 +1,6 @@
 import { GoogleGenAI, Chat, Type, FunctionDeclaration, GenerateContentResponse, FunctionCall } from "@google/genai";
 import { Parceiro, Movimentacao, NotaFiscal, Material, Colaborador } from '../types';
 
-// FIX: Add missing type definitions for AI suggestions to be used in components.
 export interface AISuggestion {
     recommendedPartnerId: string;
     justification: string;
@@ -16,9 +15,12 @@ export interface AIRevenueForecast {
 let ai: GoogleGenAI | null = null;
 const getAiClient = () => {
     if (!ai) {
-        // This will only be called once.
-        // FIX: API key must be retrieved from process.env.API_KEY per coding guidelines. This also resolves the TypeScript error with `import.meta.env`.
-        ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        // FIX: Per coding guidelines, API key must be retrieved from process.env.API_KEY.
+        const apiKey = process.env.API_KEY;
+        if (!apiKey) {
+            throw new Error("API key is not configured.");
+        }
+        ai = new GoogleGenAI({ apiKey });
     }
     return ai;
 };

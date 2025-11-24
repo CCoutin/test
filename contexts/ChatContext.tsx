@@ -51,7 +51,13 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIsInitialized(true);
     } catch (error: any) {
         console.error("Failed to initialize AI Chat:", error);
-        setChatError(error.message || "Failed to initialize assistant.");
+        let errorMessage = "Não foi possível iniciar o assistente de IA. ";
+        if (error.message && error.message.includes("API key")) {
+            errorMessage += "Verifique se a chave de API (VITE_API_KEY) está configurada corretamente no ambiente do Netlify.";
+        } else {
+            errorMessage += "Verifique sua conexão e tente novamente.";
+        }
+        setChatError(errorMessage);
         setMessages([]); // Clear messages on error
     }
   }, [isInitialized, getChatContext]);
